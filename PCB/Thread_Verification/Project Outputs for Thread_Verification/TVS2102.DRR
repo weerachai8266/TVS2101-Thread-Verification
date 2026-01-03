@@ -1,0 +1,29 @@
+----------------------------------------------------------------------------------------------------------------------------------
+NCDrill File Report For: TVS2102.PcbDoc   17-Dec-25  18:08:31
+----------------------------------------------------------------------------------------------------------------------------------
+
+Layer Pair : Top Layer to Bottom Layer
+ASCII RoundHoles File : TVS2102.TXT
+EIA File   : TVS2102.DRL
+
+Tool       Hole Size               Hole Tolerance               Hole Type       Hole Count   Plated         Tool Travel
+----------------------------------------------------------------------------------------------------------------------------------
+T1      16mil (0.399mm)                                           Round             32        PTH        17.39inch (441.76mm)
+T2      28mil (0.701mm)                                           Round             12        PTH        5.35inch (135.92mm)
+T3      28mil (0.711mm)                                           Round             14        PTH        5.18inch (131.46mm)
+T4      32mil (0.8mm)                                             Round             34        PTH        11.51inch (292.41mm)
+T5      32mil (0.813mm)                                           Round             8         PTH        0.70inch (17.78mm)
+T6      35mil (0.899mm)                                           Round             2         PTH        0.10inch (2.54mm)
+T7      39mil (1.001mm)                                           Round             23        PTH        8.59inch (218.31mm)
+T8      40mil (1.021mm)                                           Round             30        PTH        4.70inch (119.38mm)
+T9      52mil (1.321mm)                                           Round             30        PTH        11.48inch (291.59mm)
+T10     59mil (1.501mm)                                           Round             28        PTH        8.17inch (207.40mm)
+T11     126mil (3.2mm)                                            Round             4         PTH        10.63inch (270.00mm)
+----------------------------------------------------------------------------------------------------------------------------------
+Totals                                                                              217
+
+Two holes at same point : 1
+-----------------------
+330,3125
+
+Total Processing Time (hh:mm:ss) : 00:00:00
