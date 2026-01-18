@@ -67,7 +67,7 @@
 
 // Timing constants (milliseconds)
 #define DEBOUNCE_DELAY        500
-#define RESET_ALARM_DELAY     1000
+#define RESET_ALARM_DELAY     250
 #define RFID_WAKEUP_DELAY     10
 #define RFID_RESET_DELAY      50
 #define QR_TRIGGER_DELAY      500
@@ -76,6 +76,10 @@
 #define SERIAL_STABILIZE_DELAY 100
 #define LOOP_DELAY            100
 #define BOBBIN_WAIT_TIMEOUT   30000
+
+// Card presence detection constants
+#define CARD_CHECK_INTERVAL      300  // Check every 300ms (~3 times/sec)
+#define CARD_MISSING_THRESHOLD   1    // Confirm removal after 3 consecutive failures
 
 // =============== GLOBAL OBJECTS ===============
 MFRC522 rfid(RFID_SS_PIN, RFID_RST_PIN);
@@ -115,6 +119,7 @@ bool thread1Error = false; // Track Thread 1 mismatch
 bool thread2Error = false; // Track Thread 2 mismatch
 bool resetMonitoringArmed = false;
 bool bobbinsLatched = false;
+int cardMissingCount = 0; // Counter for card presence debouncing
 
 // =============== FUNCTION PROTOTYPES ===============
 void setupPins();
@@ -125,6 +130,7 @@ void setMachineOutput(bool enable);
 void triggerQRScanner(int scannerNum);
 String readQRCode(HardwareSerial& scanner, int timeoutMs);
 bool readKanbanCard(ThreadData& data);
+bool isKanbanCardStillPresent();
 bool detectBobbin(int bobbinPin);
 bool verifyThreads();
 void handleStateMachine();
@@ -299,6 +305,22 @@ void clearProcessData() {
     thread2Error = false;
     resetMonitoringArmed = false;
     bobbinsLatched = false;
+    cardMissingCount = 0;
+}
+
+// =============== KANBAN CARD PRESENCE CHECK ===============
+bool isKanbanCardStillPresent() {
+    byte bufferATQA[2];
+    byte bufferSize = sizeof(bufferATQA);
+    
+    // Send Wake-up (WUPA) command to check if card responds
+    // This is gentler than PCD_Init() and doesn't reset SPI bus
+    MFRC522::StatusCode status = rfid.PICC_WakeupA(bufferATQA, &bufferSize);
+    
+    // Clear state for next check cycle
+    rfid.PICC_HaltA();
+    
+    return (status == MFRC522::STATUS_OK);
 }
 
 // Handles global reset when bobbins are removed mid-process.
@@ -686,8 +708,31 @@ void handleStateMachine() {
         
         // ===== READY (MACHINE ENABLED) =====
         case STATE_READY: {
+            static unsigned long lastCardCheck = 0;
             bool bobbin1Present = detectBobbin(BOBBIN1_PIN);
             bool bobbin2Present = detectBobbin(BOBBIN2_PIN);
+            
+            // Check Kanban card presence using PICC_WakeupA (non-intrusive method)
+            if (millis() - lastCardCheck > CARD_CHECK_INTERVAL) {
+                lastCardCheck = millis();
+                
+                if (!isKanbanCardStillPresent()) {
+                    cardMissingCount++;
+                    if (cardMissingCount >= CARD_MISSING_THRESHOLD) {
+                        Serial.println("[WARNING] Kanban card removed! Restarting system...");
+                        setMachineOutput(false);
+                        updateLEDs(false, false, true, true);
+                        delay(RESET_ALARM_DELAY);
+                        clearProcessData();
+                        rfid.PCD_Init();  // Reset RFID reader for next card detection
+                        delay(RFID_RESET_DELAY);
+                        currentState = STATE_WAIT_KANBAN;
+                        break;
+                    }
+                } else {
+                    cardMissingCount = 0;  // Reset counter if card detected
+                }
+            }
             
             // Check if any bobbin is removed → restart entire system
             if (!bobbin1Present || !bobbin2Present) {
@@ -700,8 +745,6 @@ void handleStateMachine() {
                 break;
             }
             
-            // No need to check Kanban card - if removed, user will reset manually
-            
             updateLEDs(true, true, false, false);
             setMachineOutput(true);
             break;
@@ -709,6 +752,30 @@ void handleStateMachine() {
         
         // ===== BYPASS MODE =====
         case STATE_BYPASS: {
+            static unsigned long lastCardCheck = 0;
+            
+            // Check Kanban card presence using PICC_WakeupA (non-intrusive method)
+            if (millis() - lastCardCheck > CARD_CHECK_INTERVAL) {
+                lastCardCheck = millis();
+                
+                if (!isKanbanCardStillPresent()) {
+                    cardMissingCount++;
+                    if (cardMissingCount >= CARD_MISSING_THRESHOLD) {
+                        Serial.println("[WARNING] Kanban card removed! Restarting system...");
+                        setMachineOutput(false);
+                        updateLEDs(false, false, true, true);
+                        delay(RESET_ALARM_DELAY);
+                        clearProcessData();
+                        rfid.PCD_Init();  // Reset RFID reader for next card detection
+                        delay(RFID_RESET_DELAY);
+                        currentState = STATE_WAIT_KANBAN;
+                        break;
+                    }
+                } else {
+                    cardMissingCount = 0;  // Reset counter if card detected
+                }
+            }
+
             updateLEDs(true, true, false, false);
             setMachineOutput(true);
             break;
@@ -716,12 +783,36 @@ void handleStateMachine() {
         
         // ===== ERROR STATE =====
         case STATE_ERROR: {
+            static unsigned long lastCardCheck = 0;
+            
             // READY LEDs for matched threads, ALARM LEDs for mismatched threads
             updateLEDs(!thread1Error, !thread2Error, thread1Error, thread2Error);
             setMachineOutput(false);
             
             bool bobbin1Present = detectBobbin(BOBBIN1_PIN);
             bool bobbin2Present = detectBobbin(BOBBIN2_PIN);
+            
+            // Check Kanban card presence using PICC_WakeupA (non-intrusive method)
+            if (millis() - lastCardCheck > CARD_CHECK_INTERVAL) {
+                lastCardCheck = millis();
+                
+                if (!isKanbanCardStillPresent()) {
+                    cardMissingCount++;
+                    if (cardMissingCount >= CARD_MISSING_THRESHOLD) {
+                        Serial.println("[WARNING] Kanban card removed! Restarting system...");
+                        setMachineOutput(false);
+                        updateLEDs(false, false, true, true);
+                        delay(RESET_ALARM_DELAY);
+                        clearProcessData();
+                        rfid.PCD_Init();  // Reset RFID reader for next card detection
+                        delay(RFID_RESET_DELAY);
+                        currentState = STATE_WAIT_KANBAN;
+                        break;
+                    }
+                } else {
+                    cardMissingCount = 0;  // Reset counter if card detected
+                }
+            }
             
             // Reset when any bobbin removed (changing thread)
             if (!bobbin1Present || !bobbin2Present) {
