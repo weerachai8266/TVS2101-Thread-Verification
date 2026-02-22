@@ -215,3 +215,6 @@ __marimo__/
 # Machine build files
 machine/.pio/
 machine/.vscode/
+
+# backup
+.blend1
